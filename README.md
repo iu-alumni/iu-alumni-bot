@@ -1,4 +1,3 @@
-```markdown
 # IU Alumni Bot
 
 [![Netlify Status](https://api.netlify.com/api/v1/badges/c25c89bf-defa-40c7-a868-9da02a499f24/deploy-status)](https://app.netlify.com/sites/alumap-notification-bot/deploys)
@@ -186,4 +185,3 @@ netlify dev
    POST https://<ваш-домен>/.netlify/functions/notifyUpcoming/{eventName}/{userAlias}/
    ```
    (Реализуйте аналогично `notifyUpcoming.js`.)
-```
