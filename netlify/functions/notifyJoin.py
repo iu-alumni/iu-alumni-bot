@@ -6,10 +6,8 @@ import requests
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-# Токен вашего Telegram-бота хранится в переменной окружения
+# Ожидаем только TELEGRAM_TOKEN в переменных окружения
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-# Для теста используем фиксированный chat_id
-TEST_CHAT_ID = os.getenv("TEST_CHAT_ID", "191699380")
 
 def handler(event, context):
     # Разрешаем только POST-запросы
@@ -24,13 +22,11 @@ def handler(event, context):
     except Exception:
         return {"statusCode": 400, "body": "Bad Request: invalid path"}
 
-    # Шаг 1: используем тестовый chat_id
-    chat_id = TEST_CHAT_ID
+    # Шаг 1: используем статический chat_id для теста
+    chat_id = "191699380"
 
-    # Формируем текст сообщения
+    # Шаг 2: отправить сообщение в Telegram
     text = f"👋 Пользователь @{user_alias} присоединился к событию {event_id}."
-
-    # Шаг 2: отправка в Telegram
     try:
         tg_resp = requests.post(
             f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
@@ -39,7 +35,7 @@ def handler(event, context):
         )
         tg_resp.raise_for_status()
     except Exception as e:
-        logger.error(f"Telegram API error: {e}")
+        logger.error(f"Telegram API error: {e} — response: {getattr(e, 'response', None)}")
         return {"statusCode": 502, "body": "Bad Gateway: Telegram API error"}
 
     return {
