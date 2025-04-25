@@ -12,4 +12,4 @@ def notify_owner(event_id, owner_alias, user_alias):
     print("Response:", resp.status_code, resp.text)
 
 if __name__ == "__main__":
-    notify_owner("123", "owner_alias", "user_alias")
+    notify_owner("Тест", "aladdinych", "aladdinych")
