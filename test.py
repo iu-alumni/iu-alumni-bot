@@ -3,7 +3,7 @@ import requests
 def notify_owner(event_id, owner_alias, user_alias):
     url = (
         "https://alumap-notification-bot.netlify.app"  # <-- точка перед netlify.app!
-        "/.netlify/functions/notify_event_participation"
+        "/netlify/functions/notifyJoin"
         f"/{event_id}/{owner_alias}/{user_alias}/"
     )
     print("Calling:", url)
