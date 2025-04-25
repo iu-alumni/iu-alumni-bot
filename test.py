@@ -1,15 +1,41 @@
 import requests
+import sys
 
-def notify_owner(event_id, owner_alias, user_alias):
-    url = (
-        "https://alumap-notification-bot.netlify.app"
-        "/.netlify/functions/notifyJoin"
-        f"/{event_id}/{owner_alias}/{user_alias}/"
-    )
-    print("Calling:", url)
-    resp = requests.post(url, timeout=5)
+BASE = "https://alumap-notification-bot.netlify.app/.netlify/functions"
+TIMEOUT = 5
+
+def notify_join(event_name, owner_alias, user_alias):
+    url = f"{BASE}/notifyJoin/{event_name}/{owner_alias}/{user_alias}/"
+    print(f"\n→ Calling notifyJoin:\n  {url}")
+    resp = requests.post(url, timeout=TIMEOUT)
     resp.raise_for_status()
-    print("Response:", resp.status_code, resp.text)
+    print("← notifyJoin response:", resp.status_code, resp.text)
+
+def notify_upcoming(event_name, user_alias):
+    url = f"{BASE}/notifyUpcoming/{event_name}/{user_alias}/"
+    print(f"\n→ Calling notifyUpcoming:\n  {url}")
+    resp = requests.post(url, timeout=TIMEOUT)
+    resp.raise_for_status()
+    print("← notifyUpcoming response:", resp.status_code, resp.text)
 
 if __name__ == "__main__":
-    notify_owner("Тест", "aladdinych", "aladdinych")
+    # You can override these via command-line arguments:
+    #   python3 test.py EventName ownerAlias userAlias
+    if len(sys.argv) == 4:
+        event, owner, user = sys.argv[1:]
+    else:
+        event = "Тест"
+        owner = "aladdinych"
+        user  = "aladdinych"
+
+    print(f"Testing with event='{event}', owner='{owner}', user='{user}'")
+
+    try:
+        notify_join(event, owner, user)
+    except Exception as e:
+        print("ERROR during notifyJoin:", e)
+
+    try:
+        notify_upcoming(event, user)
+    except Exception as e:
+        print("ERROR during notifyUpcoming:", e)
