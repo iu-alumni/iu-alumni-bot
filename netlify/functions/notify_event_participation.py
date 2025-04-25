@@ -6,27 +6,34 @@ import requests
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-# Ожидаем только TELEGRAM_TOKEN в переменных окружения
+# Единственная переменная окружения: ваш токен бота
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 
 def handler(event, context):
-    # Разрешаем только POST-запросы
+    # Разрешаем только POST
     if event.get("httpMethod") != "POST":
         return {"statusCode": 405, "body": "Method Not Allowed"}
 
-    # Ожидаем путь вида /notify/event-participation/{eventId}/{ownerAlias}/{userAlias}/
+    # Ожидаем путь:
+    # /.netlify/functions/notify_event_participation/{eventId}/{ownerAlias}/{userAlias}/
     path_parts = event["path"].rstrip("/").split("/")
-    try:
-        _, notify, action, event_id, owner_alias, user_alias = path_parts
-        assert notify == "notify" and action == "event-participation"
-    except Exception:
+    # path_parts == ["", ".netlify", "functions", "notify_event_participation",
+    #                 event_id, owner_alias, user_alias]
+    if len(path_parts) != 7 \
+       or path_parts[1] != ".netlify" \
+       or path_parts[2] != "functions" \
+       or path_parts[3] != "notify_event_participation":
         return {"statusCode": 400, "body": "Bad Request: invalid path"}
 
-    # Шаг 1: используем статический chat_id для теста
+    _, _, _, _, event_id, owner_alias, user_alias = path_parts
+
+    # Тестовый chat_id
     chat_id = "191699380"
 
-    # Шаг 2: отправить сообщение в Telegram
+    # Формируем текст
     text = f"👋 Пользователь @{user_alias} присоединился к событию {event_id}."
+
+    # Шлём запрос в Telegram
     try:
         tg_resp = requests.post(
             f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
@@ -35,7 +42,7 @@ def handler(event, context):
         )
         tg_resp.raise_for_status()
     except Exception as e:
-        logger.error(f"Telegram API error: {e} — response: {getattr(e, 'response', None)}")
+        logger.error(f"Telegram API error: {e}")
         return {"statusCode": 502, "body": "Bad Gateway: Telegram API error"}
 
     return {
