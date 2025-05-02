@@ -19,8 +19,7 @@ def notify_upcoming(event_name, user_alias):
     print("← notifyUpcoming response:", resp.status_code, resp.text)
 
 if __name__ == "__main__":
-    # You can override these via command-line arguments:
-    #   python3 test.py EventName ownerAlias userAlias
+    # override these via command-line arguments: python3 test.py EventName ownerAlias userAlias
     if len(sys.argv) == 4:
         event, owner, user = sys.argv[1:]
     else:
