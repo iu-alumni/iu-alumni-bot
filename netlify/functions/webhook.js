@@ -126,7 +126,23 @@ exports.handler = async function (event) {
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                         chat_id: chatId,
-                        text: `Hello, ${alias}! 👋\n\nNow you will receive your app notifications through this bot. 🔔\n\nThanks for using IU Alumni! 🎓\n\nWould you like to leave feedback? /leave_feedback 💬\n\nFor more information type /help ℹ️\n\nTo contact the app team, text our project manager: @dudos_nikitos 📲`
+                        text: `👋 Hello, ${alias}`
+                            `\n\n🎓 Thanks for using IU Alumni!`
+                            `\n\n🔔 Now you will receive your app notifications through this bot.`
+                            `\n\n💬 Would you like to leave feedback? /leave_feedback`
+                            `\n\nℹ️ For more information type /help`
+                            `\n\n📲 To contact the app team, send a message to our project manager: @dudos_nikitos`
+                            `\n\n --- \n\n`
+                            `👋 Привет, ${alias}
+                            🎓 Спасибо, что используете IU Alumni!
+
+                            🔔 Теперь вы будете получать уведомления приложения через этого бота.
+
+                            💬 Хотите оставить отзыв? /leave_feedback
+
+                            ℹ️ Для получения дополнительной информации: /help
+
+                            📲 Чтобы связаться с командой приложения, напишите нашему менеджеру проекта: @dudos_nikitos`
                     }),
                 }
             );
