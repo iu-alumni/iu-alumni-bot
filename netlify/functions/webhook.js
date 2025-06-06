@@ -74,7 +74,7 @@ exports.handler = async function (event) {
     }
 
     // ────────────────────────────────────────────────
-    // 2) Обработка новых сообщений (регистрация и рассылка поллов)
+    // 2) Обработка новых сообщений (гreeting и фидбек-формы)
     // ────────────────────────────────────────────────
     if (update.message) {
         const msg = update.message;
@@ -83,38 +83,59 @@ exports.handler = async function (event) {
             return { statusCode: 200, body: "No username, skipping" };
         }
 
-        // хотим рассылать *только* на команду /start
-        if (msg.text !== "/start") {
-            return { statusCode: 200, body: "Not /start, skipping" };
-        }
-
         const alias = msg.from.username;
         const chatId = msg.chat.id;
 
-        const client = new Client({
-            connectionString: process.env.NEON_DATABASE_URL.trim(),
-            ssl: { rejectUnauthorized: false },
-        });
+        // если команда /start — отправляем приветствие и регистрируем пользователя
+        if (msg.text === "/start") {
+            const client = new Client({
+                connectionString: process.env.NEON_DATABASE_URL.trim(),
+                ssl: { rejectUnauthorized: false },
+            });
 
-        try {
-            await client.connect();
+            try {
+                await client.connect();
 
-            // создаём таблицу users
-            await client.query(`
-        CREATE TABLE IF NOT EXISTS users (
-          alias   TEXT   PRIMARY KEY,
-          chat_id BIGINT NOT NULL
-        );
-      `);
+                // создаём таблицу users
+                await client.query(`
+            CREATE TABLE IF NOT EXISTS users (
+              alias   TEXT   PRIMARY KEY,
+              chat_id BIGINT NOT NULL
+            );
+          `);
 
-            // пробуем вставить; если уже был — обновляем chat_id
-            const insertQ = `
-        INSERT INTO users(alias, chat_id)
-        VALUES($1,$2)
-        ON CONFLICT(alias) DO UPDATE SET chat_id = EXCLUDED.chat_id
-      `;
-            await client.query(insertQ, [alias, chatId]);
+                // пробуем вставить; если уже был — обновляем chat_id
+                const insertQ = `
+            INSERT INTO users(alias, chat_id)
+            VALUES($1,$2)
+            ON CONFLICT(alias) DO UPDATE SET chat_id = EXCLUDED.chat_id
+          `;
+                await client.query(insertQ, [alias, chatId]);
+            } catch (err) {
+                console.error("DB error in registration:", err);
+                // даже если ошибка, продолжаем и отправляем приветствие
+            } finally {
+                await client.end();
+            }
 
+            // отправляем приветственное сообщение
+            await fetch(
+                `https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN}/sendMessage`,
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        chat_id: chatId,
+                        text: `Hello, ${alias}! 👋\n\nNow you will receive your app notifications through this bot. 🔔\n\nThanks for using IU Alumni! 🎓\n\nWould you like to leave feedback? /leave_feedback 💬\n\nFor more information type /help ℹ️\n\nTo contact the app team, text our project manager: @dudos_nikitos 📲`
+                    }),
+                }
+            );
+
+            return { statusCode: 200, body: "ok" };
+        }
+
+        // если команда /leave_feedback — отправляем формы для фидбека (опросы)
+        if (msg.text === "/leave_feedback") {
             // массив опросов
             const polls = [
                 {
@@ -130,7 +151,6 @@ exports.handler = async function (event) {
                     options: ["1", "2", "3", "4", "5"],
                 },
             ];
-
 
             // шлём все опросы подряд
             for (const { question, options } of polls) {
@@ -150,13 +170,12 @@ exports.handler = async function (event) {
                     }
                 );
             }
+
             return { statusCode: 200, body: "ok" };
-        } catch (err) {
-            console.error("DB error in registration:", err);
-            return { statusCode: 500, body: "DB error" };
-        } finally {
-            await client.end();
         }
+
+        // всё остальное не обрабатываем
+        return { statusCode: 200, body: "Not a recognized command, skipping" };
     }
 
     // всё остальное не обрабатываем

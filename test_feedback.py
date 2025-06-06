@@ -1,3 +1,5 @@
+# source venv/bin/activate && python3 test_feedback.py
+
 import requests
 import sys
 import json
