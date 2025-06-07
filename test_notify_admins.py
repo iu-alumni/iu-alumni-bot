@@ -10,7 +10,10 @@ TIMEOUT = 5
 
 def test_notify_admins():
     url = f"{BASE}/notifyAdmins"
-    payload = {"s": "Test notification to admins"}
+    mention_admins = ""
+    if True:
+        mention_admins = "@VittoryAlice @oneozerova\n"
+    payload = {"s": mention_admins + "@dudos_nikitos подозрительный тип, проверьте его :)"}
     print(f"\n→ Calling notifyAdmins:\n  POST {url}\n  payload: {payload}")
     resp = requests.post(url, json=payload, timeout=TIMEOUT)
     resp.raise_for_status()
