@@ -87,7 +87,7 @@ exports.handler = async function (event) {
         const chatId = msg.chat.id;
 
         // если команда /start — отправляем приветствие и регистрируем пользователя
-        if (msg.text === "/start") {
+        if (msg.text === "/start" || msg.text === "/help") {
             const client = new Client({
                 connectionString: process.env.NEON_DATABASE_URL.trim(),
                 ssl: { rejectUnauthorized: false },
