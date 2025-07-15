@@ -153,18 +153,18 @@ exports.handler = async function (event) {
             // массив опросов
             const polls = [
                 {
-                    question: "Насколько актуальным и ценным вы считаете наш инновационный подход? 1 — совсем не ценно, 5 — очень ценно\n"
-                        + "How relevant and valuable do you find our innovative approach? 1 — not valuable at all, 5 — very valuable",
+                    question: "How relevant and valuable do you find our innovative approach? 1 — not valuable at all, 5 — very valuable\n\n"
+                        + "Насколько актуальным и ценным вы считаете наш инновационный подход? 1 — совсем не ценно, 5 — очень ценно",
                     options: ["1", "2", "3", "4", "5"],
                 },
                 {
-                    question: "Насколько интуитивным кажется приложение для создания и присоединения к событиям? 1 — совсем не интуитивно, 5 — абсолютно понятно\n"
-                        + "How intuitive does the app seem for creating and joining events? 1 — not intuitive at all, 5 — completely clear",
+                    question: "How intuitive does the app seem for creating and joining events? 1 — not intuitive at all, 5 — completely clear\n\n"
+                        + "Насколько интуитивным кажется приложение для создания и присоединения к событиям? 1 — совсем не интуитивно, 5 — абсолютно понятно",
                     options: ["1", "2", "3", "4", "5"],
                 },
                 {
-                    question: "Насколько вероятно, что вы порекомендуете приложение своим однокурсникам? 0 — совсем не вероятно, 5 — крайне вероятно\n" +
-                        "How likely are you to recommend the app to your classmates? 0 — not likely at all, 5 — extremely likely",
+                    question: "How likely are you to recommend the app to your classmates? 0 — not likely at all, 5 — extremely likely\n\n" +
+                        "Насколько вероятно, что вы порекомендуете приложение своим однокурсникам? 0 — совсем не вероятно, 5 — крайне вероятно",
                     options: ["1", "2", "3", "4", "5"],
                 },
             ];
@@ -191,31 +191,31 @@ exports.handler = async function (event) {
             return { statusCode: 200, body: "ok" };
         }
 
+
+        // ────────────────────────────────────────────────
+        // 3) Обработка команды /launch_app (запуск Mini App)
+        // ────────────────────────────────────────────────
+        if (msg.text === "/launch_app") {
+            const launchUrl = "https://iualumni.netlify.app/"
+
+            await fetch(
+                `https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN}/sendMessage`,
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        chat_id: chatId,
+                        text: `📱 Чтобы запустить Mini App, перейдите по ссылке:\n${launchUrl}`
+                    }),
+                }
+            );
+            return { statusCode: 200, body: "ok" };
+        }
+
         // всё остальное не обрабатываем
         return { statusCode: 200, body: "Not a recognized command, skipping" };
     }
 
-    // ────────────────────────────────────────────────
-    // 3) Обработка команды /launch_app (запуск Mini App)
-    // ────────────────────────────────────────────────
-    if (msg.text === "/launch_app") {
-        const launchUrl = "https://iualumni.netlify.app/"
-        const msg = update.message;
-        const alias = msg.from.username;
-        const chatId = msg.chat.id;
-        await fetch(
-            `https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN}/sendMessage`,
-            {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    chat_id: chatId,
-                    text: `📱 Чтобы запустить Mini App, перейдите по ссылке:\n${launchUrl}`
-                }),
-            }
-        );
-        return { statusCode: 200, body: "ok" };
-    }
 
     // всё остальное не обрабатываем
     return { statusCode: 200, body: "No handler for this update type" };
