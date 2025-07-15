@@ -191,12 +191,11 @@ exports.handler = async function (event) {
             return { statusCode: 200, body: "ok" };
         }
 
-
         // ────────────────────────────────────────────────
         // 3) Обработка команды /launch_app (запуск Mini App)
         // ────────────────────────────────────────────────
         if (msg.text === "/launch_app") {
-            const launchUrl = "https://iualumni.netlify.app/"
+            const webAppUrl = "https://iualumni.netlify.app/";
 
             await fetch(
                 `https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN}/sendMessage`,
@@ -205,12 +204,23 @@ exports.handler = async function (event) {
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                         chat_id: chatId,
-                        text: `📱 Чтобы запустить Mini App, перейдите по ссылке:\n${launchUrl}`
+                        text: "📱 Кнопка для перехода к Mini App:",
+                        reply_markup: {
+                            inline_keyboard: [
+                                [
+                                    {
+                                        text: "Перейти",
+                                        web_app: { url: webAppUrl }
+                                    }
+                                ]
+                            ]
+                        }
                     }),
                 }
             );
             return { statusCode: 200, body: "ok" };
         }
+
 
         // всё остальное не обрабатываем
         return { statusCode: 200, body: "Not a recognized command, skipping" };
