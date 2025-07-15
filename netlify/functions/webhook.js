@@ -200,6 +200,9 @@ exports.handler = async function (event) {
     // ────────────────────────────────────────────────
     if (msg.text === "/launch_app") {
         const launchUrl = "https://iualumni.netlify.app/"
+        const msg = update.message;
+        const alias = msg.from.username;
+        const chatId = msg.chat.id;
         await fetch(
             `https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN}/sendMessage`,
             {
