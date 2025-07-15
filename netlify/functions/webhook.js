@@ -128,18 +128,18 @@ exports.handler = async function (event) {
                         chat_id: chatId,
                         text: `👋 Hello, ${alias}
 🎓 Thanks for using IU Alumni!
+🔔 Now you will receive your app notifications through this bot.\n
 📱 To launch the Mini App type /launch_app
-🔔 Now you will receive your app notifications through this bot.
 💬 Would you like to leave feedback? /leave_feedback
-ℹ️ For more information type /help
+ℹ️ For more information type /help\n
 📲 To contact the app team, send a message to our project manager: @dudos_nikitos
 \n - - - - - - \n
 👋 Привет, ${alias}
 🎓 Спасибо, что используете IU Alumni!
+🔔 Теперь вы будете получать уведомления приложения через этого бота.\n
 📱 Чтобы запустить Mini App введите /launch_app
-🔔 Теперь вы будете получать уведомления приложения через этого бота.
 💬 Хотите оставить отзыв? /leave_feedback
-ℹ️ Для получения дополнительной информации: /help
+ℹ️ Для получения дополнительной информации: /help\n
 📲 Чтобы связаться с командой приложения, напишите нашему менеджеру проекта: @dudos_nikitos`
                     }),
                 }
