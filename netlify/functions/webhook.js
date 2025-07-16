@@ -3,13 +3,10 @@
 const { Client } = require("pg");
 const fetch = global.fetch || require("node-fetch");
 
-// Простое кэширование в памяти для хранения вопросов и опций по poll_id
-const inMemoryCache = {};
-
 // HTTP-код 405
 const METHOD_NOT_ALLOWED = { statusCode: 405, body: "Method Not Allowed" };
 
-// Вспомогательная функция: отправляет все опросы и заполняет inMemoryCache
+// Вспомогательная функция: отправляет все опросы, сохраняет их в БД polls
 async function sendFeedbackPolls(chatId) {
     const polls = [
         {
@@ -28,6 +25,21 @@ async function sendFeedbackPolls(chatId) {
             options: ["1", "2", "3", "4", "5"],
         },
     ];
+
+    const client = new Client({
+        connectionString: process.env.NEON_DATABASE_URL.trim(),
+        ssl: { rejectUnauthorized: false },
+    });
+    await client.connect();
+    // Создаем таблицу polls, если не существует
+    await client.query(`
+    CREATE TABLE IF NOT EXISTS polls (
+      poll_id   TEXT   PRIMARY KEY,
+      question  TEXT   NOT NULL,
+      options   TEXT[] NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT now()
+    );
+  `);
 
     for (const { question, options } of polls) {
         const resp = await fetch(
@@ -48,13 +60,16 @@ async function sendFeedbackPolls(chatId) {
         const body = await resp.json();
         if (body.ok && body.result.poll) {
             const poll = body.result.poll;
-            // Кэшируем вопрос и варианты по poll_id
-            inMemoryCache[poll.id] = {
-                question: poll.question,
-                options: poll.options.map(o => o.text),
-            };
+            // Сохраняем poll в БД (если не было)
+            await client.query(
+                `INSERT INTO polls(poll_id, question, options)
+           VALUES($1, $2, $3)
+         ON CONFLICT (poll_id) DO NOTHING`,
+                [poll.id, poll.question, poll.options.map(o => o.text)]
+            );
         }
     }
+    await client.end();
 }
 
 exports.handler = async function (event) {
@@ -69,47 +84,61 @@ exports.handler = async function (event) {
         return { statusCode: 400, body: "Bad Request" };
     }
 
-    // ────────────────────────────────────────────────
     // 1) Обработка poll_answer (сабмит фидбека)
-    // ────────────────────────────────────────────────
     if (update.poll_answer) {
         const answer = update.poll_answer;
         const pollId = answer.poll_id;
-        const optionIds = answer.option_ids;             // [0,2,...]
+        const optionIds = answer.option_ids;  // [0,2,...]
         const alias = answer.user.username || null;
         const chatId = answer.user.id;
 
-        // Проверяем кэш
-        const pollData = inMemoryCache[pollId];
-        if (!pollData) {
-            // Таймаут: отправляем уведомление и перезапускаем опросы
-            await fetch(
-                `https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN}/sendMessage`,
-                {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        chat_id: chatId,
-                        text: "⏰ Feedback session timed out. Please re-submit your feedback below.",
-                    }),
-                }
-            );
-            await sendFeedbackPolls(chatId);
-            return { statusCode: 200, body: JSON.stringify({ status: "timeout" }) };
-        }
-
-        // Формируем текст ответа
-        const answers = optionIds.map(i => pollData.options[i]).join(", ");
-        // Удаляем из кэша
-        delete inMemoryCache[pollId];
-
-        // Сохраняем в базу
         const client = new Client({
             connectionString: process.env.NEON_DATABASE_URL.trim(),
             ssl: { rejectUnauthorized: false },
         });
         try {
             await client.connect();
+            // Убедимся что таблица polls есть
+            await client.query(`
+        CREATE TABLE IF NOT EXISTS polls (
+          poll_id   TEXT   PRIMARY KEY,
+          question  TEXT   NOT NULL,
+          options   TEXT[] NOT NULL,
+          created_at TIMESTAMPTZ DEFAULT now()
+        );
+      `);
+            // Получаем вопрос и варианты
+            const res = await client.query(
+                `SELECT question, options FROM polls WHERE poll_id = $1`,
+                [pollId]
+            );
+            if (res.rowCount === 0) {
+                // Таймаут или неизвестный poll_id
+                await fetch(
+                    `https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN}/sendMessage`,
+                    {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            chat_id: chatId,
+                            text: "⏰ Feedback session timed out. Please re-submit your feedback below.",
+                        }),
+                    }
+                );
+                // Отправляем опросы заново
+                await client.end();
+                await sendFeedbackPolls(chatId);
+                return { statusCode: 200, body: JSON.stringify({ status: "timeout" }) };
+            }
+
+            const { question, options } = res.rows[0];
+            // Формируем текст ответа
+            const answers = optionIds.map(i => options[i]).join(", ");
+
+            // Удаляем запись из polls (чтобы не повторять)
+            await client.query(`DELETE FROM polls WHERE poll_id = $1`, [pollId]);
+
+            // Создаем feedback таблицу если нет
             await client.query(`
         CREATE TABLE IF NOT EXISTS feedback (
           id         SERIAL PRIMARY KEY,
@@ -120,30 +149,31 @@ exports.handler = async function (event) {
           created_at TIMESTAMPTZ DEFAULT now()
         );
       `);
+            // Сохраняем в feedback
             await client.query(
                 `INSERT INTO feedback(alias, chat_id, question, answer)
          VALUES($1, $2, $3, $4)`,
-                [alias, chatId, pollData.question, answers]
+                [alias, chatId, question, answers]
             );
+            // Опционально пуш
             if (process.env.FEEDBACK_WEBHOOK_URL) {
                 await fetch(process.env.FEEDBACK_WEBHOOK_URL, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ alias, chat_id: chatId, question: pollData.question, answer: answers }),
+                    body: JSON.stringify({ alias, chat_id: chatId, question, answer: answers }),
                 });
             }
+
+            await client.end();
             return { statusCode: 200, body: JSON.stringify({ status: "ok" }) };
         } catch (err) {
             console.error("Feedback handler error:", err);
-            return { statusCode: 502, body: "Bad Gateway: " + err.message };
-        } finally {
             await client.end();
+            return { statusCode: 502, body: "Bad Gateway: " + err.message };
         }
     }
 
-    // ────────────────────────────────────────────────
     // 2) Обработка новых сообщений (greeting и фидбек-формы)
-    // ────────────────────────────────────────────────
     if (update.message) {
         const msg = update.message;
         if (!msg.from?.username) {
@@ -219,22 +249,18 @@ Here’s what you can do:
                     }),
                 }
             );
-
             return { statusCode: 200, body: "ok" };
         }
 
-        // если команда /leave_feedback — отправляем формы для фидбека
+        // если команда /leave_feedback — отправляем формы для фидбека и сохраняем в DB
         if (msg.text === "/leave_feedback") {
             await sendFeedbackPolls(chatId);
             return { statusCode: 200, body: "ok" };
         }
 
-        // ────────────────────────────────────────────────
-        // 3) Обработка команды /launch_app (запуск Mini App)
-        // ────────────────────────────────────────────────
+        // 3) Обработка команды /launch_app
         if (msg.text === "/launch_app") {
             const webAppUrl = "https://iualumni.netlify.app/";
-
             await fetch(
                 `https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN}/sendMessage`,
                 {
@@ -244,14 +270,7 @@ Here’s what you can do:
                         chat_id: chatId,
                         text: "📱 Кнопка для перехода к Mini App:",
                         reply_markup: {
-                            inline_keyboard: [
-                                [
-                                    {
-                                        text: "Перейти",
-                                        web_app: { url: webAppUrl }
-                                    }
-                                ]
-                            ]
+                            inline_keyboard: [[{ text: "Перейти", web_app: { url: webAppUrl } }]]
                         }
                     }),
                 }
@@ -263,6 +282,5 @@ Here’s what you can do:
         return { statusCode: 200, body: "Not a recognized command, skipping" };
     }
 
-    // всё остальное не обрабатываем
     return { statusCode: 200, body: "No handler for this update type" };
 };
