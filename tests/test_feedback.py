@@ -34,6 +34,8 @@ def main():
     # Fetch data
     data = get_feedback()
 
+    print("DATA:", json.dumps(data, indent=2, ensure_ascii=False))
+
     # Aggregate entries by date and alias
     grouped = defaultdict(lambda: defaultdict(list))
     for item in data:
