@@ -131,10 +131,10 @@ exports.handler = async function (event) {
 🔔 You will receive your app notifications through this bot
 
 Here’s what you can do:
-➡️ Launch Mini App: /launch_app
-💬 Leave feedback: /leave_feedback
+➡️ *Launch Mini App:* /launch_app
+💬 *Leave feedback:* /leave_feedback
 
-🛡️ When you create an event, please wait for admin verification before it becomes visible to others
+🛡️ When you create an event, please wait for *admin verification* before it becomes visible to others
 
 📲 To contact the app team, send a message to our project manager: @dudos_nikitos
 
@@ -145,12 +145,13 @@ Here’s what you can do:
 🔔 Уведомления от приложения будут приходить в этот бот
 
 Вот что можно сделать:
-➡️ Запустить Mini App: /launch_app
-💬 Оставить обратную связь: /leave_feedback
+➡️ *Запустить Mini App:* /launch_app
+💬 *Оставить обратную связь:* /leave_feedback
 
-🛡️ После создания события, пожалуйста, подожди подтверждения от администратора перед тем, как оно станет доступным для других пользователей
+🛡️ После создания события, пожалуйста, подожди *подтверждения от администратора* перед тем, как оно станет доступным для других пользователей
 
-📲 Чтобы связаться с командой приложения, напишите нашему менеджеру проекта: @dudos_nikitos`
+📲 Чтобы связаться с командой приложения, напишите нашему менеджеру проекта: @dudos_nikitos`,
+                        parse_mode: "Markdown",
                     }),
                 }
             );
