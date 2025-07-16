@@ -15,7 +15,7 @@ async function sendFeedbackPolls(chatId) {
         {
             question: "How relevant and valuable do you find our innovative approach?\n1 — not valuable at all, 5 — very valuable\n\n"
                 + "Насколько актуальным и ценным вы считаете наш инновационный подход?\n1 — совсем не ценно, 5 — очень ценно",
-            options: ["1", "2", "3", "4", "5"],
+            options: ["1", "2", "3", "4", "5kek"],
         },
         {
             question: "How intuitive does the app seem for creating and joining events?\n1 — not intuitive at all, 5 — completely clear\n\n"

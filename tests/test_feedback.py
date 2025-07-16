@@ -43,11 +43,21 @@ def main():
         dt = datetime.fromisoformat(item['created_at'].rstrip('Z'))
         # Format date as 'D Month' (e.g., '14 July')
         date_str = dt.strftime('%-d %B')
-        alias = item.get('alias', '')
+        alias   = item.get('alias', '')
         time_str = dt.strftime('%H:%M:%S')
-        option = item['option_ids'][0] if item.get('option_ids') else ''
-        poll = item.get('poll_id', '')
-        grouped[date_str][alias].append((time_str, option, poll))
+
+        # Determine question text
+        question = item.get('poll_id') or item.get('question', '')
+
+        # Determine answer text
+        if 'option_ids' in item and isinstance(item['option_ids'], list) and item['option_ids']:
+            answer = item['option_ids'][0]
+        elif 'answer' in item:
+            answer = item['answer']
+        else:
+            answer = ''
+
+        grouped[date_str][alias].append((time_str, answer, question))
 
     # Prepare output filename with today's date (e.g., '15_Jul_Feedback.txt')
     today = datetime.now()
@@ -63,11 +73,9 @@ def main():
             f.write(f"{date}:\n")
             for alias, entries in grouped[date].items():
                 f.write(f"  {alias}:\n")
-                for time_str, option, poll in sorted(entries):
-                    if option:
-                        f.write(f"    {time_str} - {option} - {poll}\n")
-                    else:
-                        f.write(f"    {time_str} - nothing - {poll}\n")
+                for time_str, answer, question in sorted(entries):
+                    q = question.replace('\n', ' ')[:70] + '...' if len(question) > 50 else question
+                    f.write(f"    {time_str} - {answer} - {q}\n")
 
     print(f"Feedback written to {filename}")
 
