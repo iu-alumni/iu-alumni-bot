@@ -3,8 +3,59 @@
 const { Client } = require("pg");
 const fetch = global.fetch || require("node-fetch");
 
+// Простое кэширование в памяти для хранения вопросов и опций по poll_id
+const inMemoryCache = {};
+
 // HTTP-код 405
 const METHOD_NOT_ALLOWED = { statusCode: 405, body: "Method Not Allowed" };
+
+// Вспомогательная функция: отправляет все опросы и заполняет inMemoryCache
+async function sendFeedbackPolls(chatId) {
+    const polls = [
+        {
+            question: "How relevant and valuable do you find our innovative approach?\n1 — not valuable at all, 5 — very valuable\n\n"
+                + "Насколько актуальным и ценным вы считаете наш инновационный подход?\n1 — совсем не ценно, 5 — очень ценно",
+            options: ["1", "2", "3", "4", "5"],
+        },
+        {
+            question: "How intuitive does the app seem for creating and joining events?\n1 — not intuitive at all, 5 — completely clear\n\n"
+                + "Насколько интуитивным кажется приложение для создания и присоединения к событиям?\n1 — совсем не интуитивно, 5 — абсолютно понятно",
+            options: ["1", "2", "3", "4", "5"],
+        },
+        {
+            question: "How likely are you to recommend the app to your classmates?\n1 — not likely at all, 5 — extremely likely\n\n"
+                + "Насколько вероятно, что вы порекомендуете приложение своим однокурсникам?\n1 — совсем не вероятно, 5 — крайне вероятно",
+            options: ["1", "2", "3", "4", "5"],
+        },
+    ];
+
+    for (const { question, options } of polls) {
+        const resp = await fetch(
+            `https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN}/sendPoll`,
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    chat_id: chatId,
+                    question,
+                    options,
+                    is_anonymous: false,
+                    allows_multiple_answers: false,
+                    type: "regular",
+                }),
+            }
+        );
+        const body = await resp.json();
+        if (body.ok && body.result.poll) {
+            const poll = body.result.poll;
+            // Кэшируем вопрос и варианты по poll_id
+            inMemoryCache[poll.id] = {
+                question: poll.question,
+                options: poll.options.map(o => o.text),
+            };
+        }
+    }
+}
 
 exports.handler = async function (event) {
     if (event.httpMethod !== "POST") {
@@ -28,42 +79,59 @@ exports.handler = async function (event) {
         const alias = answer.user.username || null;
         const chatId = answer.user.id;
 
+        // Проверяем кэш
+        const pollData = inMemoryCache[pollId];
+        if (!pollData) {
+            // Таймаут: отправляем уведомление и перезапускаем опросы
+            await fetch(
+                `https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN}/sendMessage`,
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        chat_id: chatId,
+                        text: "⏰ Feedback session timed out. Please re-submit your feedback below.",
+                    }),
+                }
+            );
+            await sendFeedbackPolls(chatId);
+            return { statusCode: 200, body: JSON.stringify({ status: "timeout" }) };
+        }
+
+        // Формируем текст ответа
+        const answers = optionIds.map(i => pollData.options[i]).join(", ");
+        // Удаляем из кэша
+        delete inMemoryCache[pollId];
+
+        // Сохраняем в базу
         const client = new Client({
             connectionString: process.env.NEON_DATABASE_URL.trim(),
             ssl: { rejectUnauthorized: false },
         });
-
         try {
             await client.connect();
-
-            // создаём таблицу, если её ещё нет
             await client.query(`
         CREATE TABLE IF NOT EXISTS feedback (
-          id          SERIAL PRIMARY KEY,
-          alias       TEXT,
-          chat_id     BIGINT NOT NULL,
-          poll_id     TEXT   NOT NULL,
-          option_ids  TEXT[] NOT NULL,
-          created_at  TIMESTAMPTZ DEFAULT now()
+          id         SERIAL PRIMARY KEY,
+          alias      TEXT,
+          chat_id    BIGINT NOT NULL,
+          question   TEXT   NOT NULL,
+          answer     TEXT   NOT NULL,
+          created_at TIMESTAMPTZ DEFAULT now()
         );
       `);
-
-            // вставляем ответ
             await client.query(
-                `INSERT INTO feedback(alias, chat_id, poll_id, option_ids)
+                `INSERT INTO feedback(alias, chat_id, question, answer)
          VALUES($1, $2, $3, $4)`,
-                [alias, chatId, pollId, optionIds.map(String)]
+                [alias, chatId, pollData.question, answers]
             );
-
-            // опционально: пушим на внешний вебхук
             if (process.env.FEEDBACK_WEBHOOK_URL) {
                 await fetch(process.env.FEEDBACK_WEBHOOK_URL, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ alias, chat_id: chatId, poll_id: pollId, selected_options: optionIds }),
+                    body: JSON.stringify({ alias, chat_id: chatId, question: pollData.question, answer: answers }),
                 });
             }
-
             return { statusCode: 200, body: JSON.stringify({ status: "ok" }) };
         } catch (err) {
             console.error("Feedback handler error:", err);
@@ -74,11 +142,10 @@ exports.handler = async function (event) {
     }
 
     // ────────────────────────────────────────────────
-    // 2) Обработка новых сообщений (гreeting и фидбек-формы)
+    // 2) Обработка новых сообщений (greeting и фидбек-формы)
     // ────────────────────────────────────────────────
     if (update.message) {
         const msg = update.message;
-        // пропускаем, если нет username
         if (!msg.from?.username) {
             return { statusCode: 200, body: "No username, skipping" };
         }
@@ -95,30 +162,26 @@ exports.handler = async function (event) {
 
             try {
                 await client.connect();
-
                 // создаём таблицу users
                 await client.query(`
-            CREATE TABLE IF NOT EXISTS users (
-              alias   TEXT   PRIMARY KEY,
-              chat_id BIGINT NOT NULL
-            );
-          `);
-
-                // пробуем вставить; если уже был — обновляем chat_id
+          CREATE TABLE IF NOT EXISTS users (
+            alias   TEXT   PRIMARY KEY,
+            chat_id BIGINT NOT NULL
+          );
+        `);
+                // вставляем или обновляем
                 const insertQ = `
-            INSERT INTO users(alias, chat_id)
-            VALUES($1,$2)
-            ON CONFLICT(alias) DO UPDATE SET chat_id = EXCLUDED.chat_id
-          `;
+          INSERT INTO users(alias, chat_id)
+          VALUES($1,$2)
+          ON CONFLICT(alias) DO UPDATE SET chat_id = EXCLUDED.chat_id
+        `;
                 await client.query(insertQ, [alias, chatId]);
             } catch (err) {
                 console.error("DB error in registration:", err);
-                // даже если ошибка, продолжаем и отправляем приветствие
             } finally {
                 await client.end();
             }
 
-            // отправляем приветственное сообщение
             // отправляем приветственное сообщение
             await fetch(
                 `https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN}/sendMessage`,
@@ -152,55 +215,17 @@ Here’s what you can do:
 
 🛡️ После создания события, пожалуйста, подожди <b>подтверждения от администратора</b> перед тем, как оно станет доступным для других пользователей
 
-📲 Чтобы связаться с командой приложения, напишите нашему менеджеру проекта: @dudos_nikitos`
+📲 Чтобы связаться с командой приложения, напишите нашему менеджеру проекта: @dudos_nikitos`,
                     }),
                 }
             );
 
-
             return { statusCode: 200, body: "ok" };
         }
 
-        // если команда /leave_feedback — отправляем формы для фидбека (опросы)
+        // если команда /leave_feedback — отправляем формы для фидбека
         if (msg.text === "/leave_feedback") {
-            // массив опросов
-            const polls = [
-                {
-                    question: "How relevant and valuable do you find our innovative approach? 1 — not valuable at all, 5 — very valuable\n\n"
-                        + "Насколько актуальным и ценным вы считаете наш инновационный подход? 1 — совсем не ценно, 5 — очень ценно",
-                    options: ["1", "2", "3", "4", "5"],
-                },
-                {
-                    question: "How intuitive does the app seem for creating and joining events? 1 — not intuitive at all, 5 — completely clear\n\n"
-                        + "Насколько интуитивным кажется приложение для создания и присоединения к событиям? 1 — совсем не интуитивно, 5 — абсолютно понятно",
-                    options: ["1", "2", "3", "4", "5"],
-                },
-                {
-                    question: "How likely are you to recommend the app to your classmates? 0 — not likely at all, 5 — extremely likely\n\n" +
-                        "Насколько вероятно, что вы порекомендуете приложение своим однокурсникам? 0 — совсем не вероятно, 5 — крайне вероятно",
-                    options: ["1", "2", "3", "4", "5"],
-                },
-            ];
-
-            // шлём все опросы подряд
-            for (const { question, options } of polls) {
-                await fetch(
-                    `https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN}/sendPoll`,
-                    {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                            chat_id: chatId,
-                            question,
-                            options,
-                            is_anonymous: false,
-                            allows_multiple_answers: false,
-                            type: "regular",
-                        }),
-                    }
-                );
-            }
-
+            await sendFeedbackPolls(chatId);
             return { statusCode: 200, body: "ok" };
         }
 
@@ -234,11 +259,9 @@ Here’s what you can do:
             return { statusCode: 200, body: "ok" };
         }
 
-
         // всё остальное не обрабатываем
         return { statusCode: 200, body: "Not a recognized command, skipping" };
     }
-
 
     // всё остальное не обрабатываем
     return { statusCode: 200, body: "No handler for this update type" };
