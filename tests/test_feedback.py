@@ -63,7 +63,7 @@ def main():
                 f.write(f"  {alias}:\n")
                 for time_str, option, poll in sorted(entries):
                     if option:
-                        f.write(f"    {time_str} - {int(option) + 1} - {poll}\n")
+                        f.write(f"    {time_str} - {option} - {poll}\n")
                     else:
                         f.write(f"    {time_str} - nothing - {poll}\n")
 
