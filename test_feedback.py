@@ -3,6 +3,8 @@
 
 # source venv/bin/activate && python3 test_feedback.py
 
+# TIME ON SERVER IS MSK - 3 (UTC-0), SO ADD +3 when interpreting the feedback
+
 import requests
 import sys
 import json
@@ -58,9 +60,12 @@ def main():
         ):
             f.write(f"{date}:\n")
             for alias, entries in grouped[date].items():
-                f.write(f"  {alias}\n")
+                f.write(f"  {alias}:\n")
                 for time_str, option, poll in sorted(entries):
-                    f.write(f"    {time_str} - {option} - {poll}\n")
+                    if option:
+                        f.write(f"    {time_str} - {int(option) + 1} - {poll}\n")
+                    else:
+                        f.write(f"    {time_str} - nothing - {poll}\n")
 
     print(f"Feedback written to {filename}")
 
