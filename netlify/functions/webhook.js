@@ -135,6 +135,7 @@ exports.handler = async function (event) {
 Here’s what you can do:
 ➡️ <b>Launch Mini App:</b> /launch_app
 💬 <b>Leave feedback:</b> /leave_feedback
+
 🛡️ When you create an event, please wait for <b>admin verification</b> before it becomes visible to others
 
 📲 To contact the app team, send a message to our project manager: @dudos_nikitos
@@ -148,6 +149,7 @@ Here’s what you can do:
 Вот что можно сделать:
 ➡️ <b>Запустить Mini App:</b> /launch_app
 💬 <b>Дать обратную связь:</b> /leave_feedback
+
 🛡️ После создания события, пожалуйста, подожди <b>подтверждения от администратора</b> перед тем, как оно станет доступным для других пользователей
 
 📲 Чтобы связаться с командой приложения, напишите нашему менеджеру проекта: @dudos_nikitos`
