@@ -3,19 +3,16 @@
 const { Client } = require("pg");
 const fetch = global.fetch || require("node-fetch");
 
-// Простое кэширование в памяти для хранения вопросов и опций по poll_id
-const inMemoryCache = {};  // { [pollId]: { question: string, options: string[] } }
-
 // HTTP-код 405
 const METHOD_NOT_ALLOWED = { statusCode: 405, body: "Method Not Allowed" };
 
-// Вспомогательная функция: отправляет все опросы и заполняет inMemoryCache
+// Вспомогательная функция: отправляет все опросы и сохраняет их в БД `polls`
 async function sendFeedbackPolls(chatId) {
     const polls = [
         {
             question: "How relevant and valuable do you find our innovative approach?\n1 — not valuable at all, 5 — very valuable\n\n"
                 + "Насколько актуальным и ценным вы считаете наш инновационный подход?\n1 — совсем не ценно, 5 — очень ценно",
-            options: ["1", "2", "3", "4", "5kek"],
+            options: ["1", "2", "3", "4", "5"],
         },
         {
             question: "How intuitive does the app seem for creating and joining events?\n1 — not intuitive at all, 5 — completely clear\n\n"
@@ -28,6 +25,22 @@ async function sendFeedbackPolls(chatId) {
             options: ["1", "2", "3", "4", "5"],
         },
     ];
+
+    const client = new Client({
+        connectionString: process.env.NEON_DATABASE_URL.trim(),
+        ssl: { rejectUnauthorized: false },
+    });
+    await client.connect();
+
+    // создаём таблицу polls, если её ещё нет
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS polls (
+        poll_id    TEXT   PRIMARY KEY,
+        question   TEXT   NOT NULL,
+        options    TEXT[] NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT now()
+      );
+    `);
 
     for (const { question, options } of polls) {
         const resp = await fetch(
@@ -48,13 +61,17 @@ async function sendFeedbackPolls(chatId) {
         const body = await resp.json();
         if (body.ok && body.result.poll) {
             const poll = body.result.poll;
-            // сохраняем в RAM: текст вопроса и варианты
-            inMemoryCache[poll.id] = {
-                question: poll.question,
-                options: poll.options.map(o => o.text),
-            };
+            // сохраняем poll_id, вопрос и варианты в БД
+            await client.query(
+                `INSERT INTO polls(poll_id, question, options)
+                   VALUES($1, $2, $3)
+                 ON CONFLICT (poll_id) DO NOTHING;`,
+                [poll.id, poll.question, poll.options.map(o => o.text)]
+            );
         }
     }
+
+    await client.end();
 }
 
 exports.handler = async function (event) {
@@ -69,50 +86,76 @@ exports.handler = async function (event) {
         return { statusCode: 400, body: "Bad Request" };
     }
 
+    // ────────────────────────────────────────────────
     // 1) Обработка poll_answer (сабмит фидбека)
+    // ────────────────────────────────────────────────
     if (update.poll_answer) {
         const { poll_id: pollId, option_ids: optionIds, user } = update.poll_answer;
         const alias = user.username || null;
         const chatId = user.id;
 
-        // получаем из RAM
-        const pollData = inMemoryCache[pollId];
-        if (!pollData) {
-            // таймаут: перезапускаем опросы
-            await fetch(
-                `https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN}/sendMessage`,
-                {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ chat_id: chatId, text: "⏰ Feedback session timed out. Please re-submit your feedback." }),
-                }
-            );
-            await sendFeedbackPolls(chatId);
-            return { statusCode: 200, body: JSON.stringify({ status: "timeout" }) };
-        }
-
-        const question = pollData.question;
-        const answer = optionIds.map(i => pollData.options[i]).join(", ");
-        // удаляем из RAM
-        delete inMemoryCache[pollId];
-
-        // сохраняем в БД только ответ
-        const client = new Client({ connectionString: process.env.NEON_DATABASE_URL.trim(), ssl: { rejectUnauthorized: false } });
+        const client = new Client({
+            connectionString: process.env.NEON_DATABASE_URL.trim(),
+            ssl: { rejectUnauthorized: false },
+        });
         try {
             await client.connect();
+
+            // убедимся, что таблицы polls и feedback существуют
             await client.query(`
-        CREATE TABLE IF NOT EXISTS feedback (
-          id          SERIAL PRIMARY KEY,
-          alias       TEXT,
-          question    TEXT   NOT NULL,
-          answer      TEXT   NOT NULL,
-          created_at  TIMESTAMPTZ DEFAULT now()
-        );
-      `);
+              CREATE TABLE IF NOT EXISTS polls (
+                poll_id    TEXT   PRIMARY KEY,
+                question   TEXT   NOT NULL,
+                options    TEXT[] NOT NULL,
+                created_at TIMESTAMPTZ DEFAULT now()
+              );
+            `);
+            await client.query(`
+              CREATE TABLE IF NOT EXISTS feedback (
+                id          SERIAL PRIMARY KEY,
+                alias       TEXT,
+                question    TEXT   NOT NULL,
+                answer      TEXT   NOT NULL,
+                created_at  TIMESTAMPTZ DEFAULT now()
+              );
+            `);
+
+            // забираем вопрос и варианты из polls
+            const res = await client.query(
+                `SELECT question, options FROM polls WHERE poll_id = $1`,
+                [pollId]
+            );
+            if (res.rowCount === 0) {
+                // таймаут: пользователь слишком долго отвечал
+                await fetch(
+                    `https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN}/sendMessage`,
+                    {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            chat_id: chatId,
+                            text: "⏰ Feedback session timed out. Please re-submit your feedback.",
+                        }),
+                    }
+                );
+                await client.end();
+                await sendFeedbackPolls(chatId);
+                return { statusCode: 200, body: JSON.stringify({ status: "timeout" }) };
+            }
+
+            const { question, options } = res.rows[0];
+            const answer = optionIds.map(i => options[i]).join(", ");
+
+            // удаляем запись из polls, чтобы не обрабатывать повторно
+            await client.query(`DELETE FROM polls WHERE poll_id = $1`, [pollId]);
+
+            // сохраняем в feedback
             await client.query(
                 `INSERT INTO feedback(alias, question, answer) VALUES($1, $2, $3)`,
                 [alias, question, answer]
             );
+
+            // опционально: пуш на внешний вебхук
             if (process.env.FEEDBACK_WEBHOOK_URL) {
                 await fetch(process.env.FEEDBACK_WEBHOOK_URL, {
                     method: "POST",
@@ -120,16 +163,19 @@ exports.handler = async function (event) {
                     body: JSON.stringify({ alias, question, answer }),
                 });
             }
-            await client.end();
+
             return { statusCode: 200, body: JSON.stringify({ status: "ok" }) };
         } catch (err) {
             console.error("Feedback handler error:", err);
-            await client.end();
             return { statusCode: 502, body: "Bad Gateway: " + err.message };
+        } finally {
+            await client.end();
         }
     }
 
-    // 2) Обработка новых сообщений
+    // ────────────────────────────────────────────────
+    // 2) Обработка новых сообщений (greeting и фидбек-формы)
+    // ────────────────────────────────────────────────
     if (update.message) {
         const msg = update.message;
         if (!msg.from?.username) {
@@ -138,14 +184,24 @@ exports.handler = async function (event) {
         const alias = msg.from.username;
         const chatId = msg.chat.id;
 
-        // /start, /help
+        // /start и /help — регистрация пользователя и приветствие
         if (msg.text === "/start" || msg.text === "/help") {
-            const client = new Client({ connectionString: process.env.NEON_DATABASE_URL.trim(), ssl: { rejectUnauthorized: false } });
+            const client = new Client({
+                connectionString: process.env.NEON_DATABASE_URL.trim(),
+                ssl: { rejectUnauthorized: false },
+            });
             try {
                 await client.connect();
-                await client.query(`CREATE TABLE IF NOT EXISTS users (alias TEXT PRIMARY KEY, chat_id BIGINT NOT NULL);`);
+                await client.query(`
+                  CREATE TABLE IF NOT EXISTS users (
+                    alias   TEXT   PRIMARY KEY,
+                    chat_id BIGINT NOT NULL
+                  );
+                `);
                 await client.query(
-                    `INSERT INTO users(alias, chat_id) VALUES($1, $2) ON CONFLICT(alias) DO UPDATE SET chat_id = EXCLUDED.chat_id`,
+                    `INSERT INTO users(alias, chat_id)
+                     VALUES($1,$2)
+                     ON CONFLICT(alias) DO UPDATE SET chat_id = EXCLUDED.chat_id`,
                     [alias, chatId]
                 );
             } catch (err) {
@@ -153,6 +209,7 @@ exports.handler = async function (event) {
             } finally {
                 await client.end();
             }
+
             await fetch(
                 `https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN}/sendMessage`,
                 {
@@ -168,13 +225,13 @@ exports.handler = async function (event) {
             return { statusCode: 200, body: "ok" };
         }
 
-        // /leave_feedback
+        // /leave_feedback — отправляем опросы и сохраняем их в polls
         if (msg.text === "/leave_feedback") {
             await sendFeedbackPolls(chatId);
             return { statusCode: 200, body: "ok" };
         }
 
-        // /launch_app
+        // /launch_app — кнопка веб‑приложения
         if (msg.text === "/launch_app") {
             const webAppUrl = "https://iualumni.netlify.app/";
             await fetch(
@@ -182,7 +239,15 @@ exports.handler = async function (event) {
                 {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ chat_id: chatId, text: "📱 Кнопка для перехода к Mini App:", reply_markup: { inline_keyboard: [[{ text: "Перейти", web_app: { url: webAppUrl } }]] } }),
+                    body: JSON.stringify({
+                        chat_id: chatId,
+                        text: "📱 Кнопка для перехода к Mini App:",
+                        reply_markup: {
+                            inline_keyboard: [
+                                [{ text: "Перейти", web_app: { url: webAppUrl } }]
+                            ]
+                        }
+                    }),
                 }
             );
             return { statusCode: 200, body: "ok" };
@@ -191,5 +256,6 @@ exports.handler = async function (event) {
         return { statusCode: 200, body: "Not a recognized command, skipping" };
     }
 
+    // всё остальное не обрабатываем
     return { statusCode: 200, body: "No handler for this update type" };
 };
