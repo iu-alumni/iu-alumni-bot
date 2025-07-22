@@ -78,7 +78,7 @@ exports.handler = async function (event) {
 
         // 6) Шлём кастомный текст и пользователю, и владельцу
         await send(userChatId, customText);
-        await send(ownerChatId, customText);
+        // await send(ownerChatId, customText);
 
         return {
             statusCode: 200,

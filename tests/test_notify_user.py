@@ -11,8 +11,8 @@ TIMEOUT = 5
 def test_notify_user():
     # Задайте свои параметры
     event_name = "summer_party"
-    owner_alias = "alice"
-    user_alias = "bob"
+    owner_alias = "aladdinych"
+    user_alias = "aladdinych"
 
     url = f"{BASE}/notifyUser/{event_name}/{owner_alias}/{user_alias}/"
     payload = {
