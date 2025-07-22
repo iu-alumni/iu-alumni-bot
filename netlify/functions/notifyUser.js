@@ -11,7 +11,7 @@ exports.handler = async function (event) {
     // 2) Разбираем путь вида
     //    /.netlify/functions/notifyUser/{eventName}/{userAlias}/
     const parts = event.path.replace(/\/$/, "").split("/");
-    const [eventName, userAlias] = parts.slice(-3);
+    const [eventName, userAlias] = parts.slice(-2);
 
     // 2.1) Парсим тело и достаём текст
     let customText;
@@ -69,7 +69,6 @@ exports.handler = async function (event) {
             }
         };
 
-        // 6) Шлём кастомный текст и пользователю, и владельцу
         await send(userChatId, customText);
 
         return {
