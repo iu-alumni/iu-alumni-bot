@@ -14,9 +14,9 @@ def test_notify_user():
     owner_alias = "aladdinych"
     user_alias = "aladdinych"
 
-    url = f"{BASE}/notifyUser/{event_name}/{owner_alias}/{user_alias}/"
+    url = f"{BASE}/notifyUser/{event_name}/{user_alias}/"
     payload = {
-        "text": "Тестовое уведомление: вы успешно присоединились к событию!"
+        "text": "Test notification for user",
     }
 
     print(f"\n→ Calling notifyUser:\n  POST {url}\n  payload: {payload}")

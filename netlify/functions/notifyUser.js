@@ -34,30 +34,23 @@ exports.handler = async function (event) {
     try {
         await client.connect();
 
-        // 4) Читаем chat_id для owner и для user
-        const ownerQ = await client.query(
-            "SELECT chat_id FROM users WHERE alias = $1",
-            [ownerAlias]
-        );
         const userQ = await client.query(
             "SELECT chat_id FROM users WHERE alias = $1",
             [userAlias]
         );
 
-        if (ownerQ.rowCount === 0 || userQ.rowCount === 0) {
+        if (userQ.rowCount === 0) {
             return {
                 statusCode: 404,
                 body: JSON.stringify({
                     error: "Alias not found",
                     missing: [
-                        ownerQ.rowCount === 0 && ownerAlias,
                         userQ.rowCount === 0 && userAlias
                     ].filter(Boolean)
                 })
             };
         }
 
-        const ownerChatId = ownerQ.rows[0].chat_id;
         const userChatId = userQ.rows[0].chat_id;
 
         // 5) Используем единый текст из body
@@ -78,7 +71,6 @@ exports.handler = async function (event) {
 
         // 6) Шлём кастомный текст и пользователю, и владельцу
         await send(userChatId, customText);
-        // await send(ownerChatId, customText);
 
         return {
             statusCode: 200,
