@@ -9,9 +9,9 @@ exports.handler = async function (event) {
     }
 
     // 2) Разбираем путь вида
-    //    /.netlify/functions/notifyUser/{eventName}/{ownerAlias}/{userAlias}/
+    //    /.netlify/functions/notifyUser/{eventName}/{userAlias}/
     const parts = event.path.replace(/\/$/, "").split("/");
-    const [eventName, ownerAlias, userAlias] = parts.slice(-3);
+    const [eventName, userAlias] = parts.slice(-3);
 
     // 2.1) Парсим тело и достаём текст
     let customText;
