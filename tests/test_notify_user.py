@@ -28,8 +28,6 @@ def test_notify_user():
     print("← notifyUser response:", resp.status_code)
     print(json.dumps(data, ensure_ascii=False, indent=2))
 
-    # Можно добавить простую проверку
-    # assert data.get("status") == "ok", "Expected status == 'ok'"
     return data
 
 if __name__ == "__main__":
