@@ -228,9 +228,11 @@ Here’s what you can do:
 
 🛡️ When you create an event, please wait for <b>admin verification</b> before it becomes visible to others
 
+🪲 Found a bug? <a href="https://forms.yandex.ru/u/68809ed302848f0f982a1ba0">Bug report form</a>
+
 📲 To contact the app team, send a message to our project manager: @dudos_nikitos
 
-🪲 Found a bug? <a href="https://forms.yandex.ru/u/68809ed302848f0f982a1ba0">Bug report form</a>
+🚀 <a href="https://www.rustore.ru/catalog/app/com.innopolis.alumni">Download for Android from RuStore!</a>
 
 - - - - - -
 
@@ -244,9 +246,11 @@ Here’s what you can do:
 
 🛡️ После создания события, пожалуйста, подожди <b>подтверждения от администратора</b> перед тем, как оно станет доступным для других пользователей
 
+🪲 Нашли баг? <a href="https://forms.yandex.ru/u/68809ed302848f0f982a1ba0">Форма для отчёта о баге</a>
+
 📲 Чтобы связаться с командой приложения, напишите нашему менеджеру проекта: @dudos_nikitos
 
-🪲 Нашли баг? <a href="https://forms.yandex.ru/u/68809ed302848f0f982a1ba0">Форма для отчёта о баге</a>
+🚀 <a href="https://www.rustore.ru/catalog/app/com.innopolis.alumni">Мы есть на RuStore!</a>
 `
                     }),
                 }
