@@ -230,7 +230,7 @@ Here’s what you can do:
 
 🪲 Found a bug? <a href="https://forms.yandex.ru/u/68809ed302848f0f982a1ba0">Bug report form</a>
 
-📲 To contact the app team, send a message to our project manager: @dudos_nikitos
+📲 To contact the app team, send a message to our project manager: @VittoryAlice
 
 🚀 <a href="https://www.rustore.ru/catalog/app/com.innopolis.alumni">Download for Android from RuStore!</a>
 
@@ -248,7 +248,7 @@ Here’s what you can do:
 
 🪲 Нашли баг? <a href="https://forms.yandex.ru/u/68809ed302848f0f982a1ba0">Форма для отчёта о баге</a>
 
-📲 Чтобы связаться с командой приложения, напишите нашему менеджеру проекта: @dudos_nikitos
+📲 Чтобы связаться с командой приложения, напишите нашему менеджеру проекта: @VittoryAlice
 
 🚀 <a href="https://www.rustore.ru/catalog/app/com.innopolis.alumni">Мы есть на RuStore!</a>
 `
